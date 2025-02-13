@@ -11,6 +11,7 @@ import requests
 import logging
 import json
 from langchain_core.prompts import PromptTemplate
+from pathlib import Path
 
 @dataclass
 class IntegrationRequest:
@@ -133,11 +134,16 @@ class IntegrationAgent:
             integration = await self._generate_integration(request, analysis)
             self.logger.info("Integration generation complete")
             
+            # Step 4: Save the generated files
+            saved_files = self.save_integration(integration, request.service_name)
+            self.logger.info(f"Integration files saved to: {saved_files}")
+            
             return {
                 "status": "success",
                 "integration": integration,
                 "documentation_sources": search_results,
-                "analysis": analysis
+                "analysis": analysis,
+                "saved_files": saved_files
             }
             
         except Exception as e:
@@ -208,26 +214,101 @@ class IntegrationAgent:
         analysis: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Generate the integration code and documentation."""
+        # Generate the complete integration code in one go, utilizing the full token limit
         generation_prompt = f"""
-        Based on the analysis of {request.service_name} integration requirements,
-        generate a complete integration solution including:
+        Generate a complete, production-ready integration for {request.service_name}.
+        The code must be complete and include ALL of the following:
         
-        1. Installation and setup instructions
-        2. Authentication implementation
-        3. Main integration class/module
-        4. Error handling
-        5. Usage examples
-        6. Testing approach
+        1. All necessary imports
+        2. Complete class definition with proper type hints
+        3. Full authentication implementation
+        4. All core API methods and functionality
+        5. Comprehensive error handling and logging
+        6. Helper utilities and support functions
+        
+        Requirements:
+        {request.description}
         
         Analysis context:
         {json.dumps(analysis)}
         
-        Requirements:
-        {request.description}
+        Important:
+        - Include complete docstrings for all classes and methods
+        - Implement proper error handling for all API calls
+        - Add logging for important operations
+        - Follow PEP 8 style guidelines
+        - Include type hints for all methods
+        - Do not include any other text or comments before or after the code
+        - Do not create a dependencies file, this will be created later
+        - Do not wrap the file in ```python or ```, return just the code.
+        
+        Return ONLY the complete Python code without any explanation or markdown.
+        The code should be fully functional and ready to use.
         """
         
-        response = await self.llm.ainvoke([HumanMessage(content=generation_prompt)])
-        return self._parse_generation_response(response.content)
+        # Use the maximum available tokens for the code generation
+        code_response = await self.llm.ainvoke(
+            [HumanMessage(content=generation_prompt)],
+            max_tokens=8000  # Leave some tokens for system messages
+        )
+        
+        integration_code = code_response.content
+        
+        # Generate README with remaining context
+        documentation_prompt = f"""
+        Create a comprehensive README.md for the {request.service_name} integration.
+        Include:
+
+        1. Overview of the integration
+        2. Prerequisites and dependencies
+        3. Installation instructions
+        4. Configuration steps (including environment variables)
+        5. Usage examples with code snippets
+        6. API Reference for all public methods
+
+        Base this on:
+        - Service: {request.service_name}
+        - Type: {request.integration_type}
+        - Description: {request.description}
+        - Authentication: {request.authentication_type}
+        
+        Return ONLY the markdown content for README.md.
+        Do NOT include license documentation. That is not needed.
+
+        """
+        
+        docs_response = await self.llm.ainvoke(
+            [HumanMessage(content=documentation_prompt)],
+            max_tokens=4000  # Sufficient for README generation
+        )
+
+        # Generate pyproject.toml with dependencies
+        pyproject_prompt = f"""
+        Create a pyproject.toml file for the {request.service_name} integration with:
+        1. Python version requirement (3.12 - 4.0)
+        2. All necessary dependencies based on the integration code
+        3. Project metadata and configuration
+        4. Build system requirements
+        - Do not wrap the file in ```, return just the code.
+        
+        Integration code context for dependencies:
+        {integration_code}
+        
+        Return ONLY the pyproject.toml content.
+        """
+
+        pyproject_response = await self.llm.ainvoke(
+            [HumanMessage(content=pyproject_prompt)],
+            max_tokens=2000  # Sufficient for pyproject.toml
+        )
+        
+        return {
+            "files": {
+                "integration.py": integration_code,
+                "README.md": docs_response.content,
+                "pyproject.toml": pyproject_response.content
+            }
+        }
 
     def _calculate_relevance(self, result: Dict[str, str], request: IntegrationRequest) -> float:
         """Calculate relevance score for a search result."""
@@ -359,3 +440,41 @@ class IntegrationAgent:
         """Extract code examples from documentation."""
         # Implementation for extracting code examples
         pass
+
+    def save_integration(
+        self,
+        integration_data: Dict[str, Any],
+        service_name: str,
+        output_dir: str = "integrations"
+    ) -> Dict[str, str]:
+        """
+        Save generated integration files to disk.
+        
+        Args:
+            integration_data: Dictionary containing integration code and documentation
+            service_name: Name of the service for directory structure
+            output_dir: Base directory for integrations
+            
+        Returns:
+            Dictionary mapping file names to their paths
+        """
+        try:
+            # Create service-specific directory
+            service_dir = Path(output_dir) / service_name.lower()
+            service_dir.mkdir(parents=True, exist_ok=True)
+            
+            saved_files = {}
+            
+            # Save all generated files
+            for filename, content in integration_data['files'].items():
+                file_path = service_dir / filename
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                saved_files[filename] = str(file_path)
+                self.logger.info(f"Saved {filename} to {file_path}")
+            
+            return saved_files
+            
+        except Exception as e:
+            self.logger.error(f"Error saving integration: {str(e)}")
+            raise

@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from agent.agent import IntegrationAgent, IntegrationRequest
 import logging
+from pathlib import Path
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +39,11 @@ async def main():
     )
     logger.info(f"Created integration request for {request.service_name}")
     
+    # Create integrations directory if it doesn't exist
+    integrations_dir = Path("integrations")
+    integrations_dir.mkdir(exist_ok=True)
+    logger.info("Ensured integrations directory exists")
+    
     # Generate the integration
     print(f"\nGenerating integration for {request.service_name}...")
     try:
@@ -46,7 +52,10 @@ async def main():
         
         if result["status"] == "success":
             logger.info("Integration created successfully")
+            logger.debug(f"Integration result structure: {result}")
             print("\n✅ Integration created successfully!")
+            
+            print(f"\n💾 Integration saved to: {result['saved_files']}")
             
             print("\n📚 Documentation Sources:")
             for source in result["documentation_sources"][:3]:
@@ -54,9 +63,6 @@ async def main():
             
             print("\n🔍 Analysis:")
             print(result["analysis"])
-            
-            print("\n💻 Integration Code:")
-            print(result["integration"])
         else:
             logger.error(f"Integration creation failed: {result['error']}")
             print(f"\n❌ Error creating integration: {result['error']}")
