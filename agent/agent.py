@@ -307,7 +307,8 @@ class IntegrationAgent:
                 "integration.py": integration_code,
                 "README.md": docs_response.content,
                 "pyproject.toml": pyproject_response.content
-            }
+            },
+            "description": request.description
         }
 
     def _calculate_relevance(self, result: Dict[str, str], request: IntegrationRequest) -> float:
@@ -441,6 +442,36 @@ class IntegrationAgent:
         # Implementation for extracting code examples
         pass
 
+    def _generate_action_path(self, description: str) -> str:
+        """
+        Convert an action description into a valid directory name.
+        
+        Args:
+            description: The action description (e.g., "Log a call to a Company in Hubspot")
+            
+        Returns:
+            A sanitized path name (e.g., "log_call_company")
+        """
+        # Convert to lowercase and remove service name references
+        action = description.lower()
+        for service in ["hubspot", "intercom", "salesforce"]:  # Add more services as needed
+            action = action.replace(f" in {service}", "")
+            action = action.replace(f" to {service}", "")
+        
+        # Remove common filler words
+        filler_words = ["a", "the", "to", "and", "or", "in"]
+        words = action.split()
+        words = [w for w in words if w not in filler_words]
+        
+        # Join remaining words with underscores
+        action_path = "_".join(words)
+        
+        # Remove any special characters and ensure it's a valid directory name
+        action_path = "".join(c if c.isalnum() or c == "_" else "_" for c in action_path)
+        action_path = action_path.strip("_")
+        
+        return action_path
+
     def save_integration(
         self,
         integration_data: Dict[str, Any],
@@ -459,8 +490,11 @@ class IntegrationAgent:
             Dictionary mapping file names to their paths
         """
         try:
-            # Create service-specific directory
-            service_dir = Path(output_dir) / service_name.lower()
+            # Generate action path from the description
+            action_path = self._generate_action_path(integration_data.get('description', 'default'))
+            
+            # Create service and action-specific directory
+            service_dir = Path(output_dir) / service_name.lower() / action_path
             service_dir.mkdir(parents=True, exist_ok=True)
             
             saved_files = {}
