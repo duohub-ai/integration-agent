@@ -1,0 +1,47 @@
+# Environment variables
+.env
+.env.local
+.env.*
+
+# Dependencies
+/node_modules
+/vendor
+
+# Cache files
+.cache/
+*.cache
+.npm
+.eslintcache
+
+# Build output
+/dist
+/build
+/out
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+/coverage
+.nyc_output
+
+# Misc
+.tmp
+.temp
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/

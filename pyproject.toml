@@ -1,0 +1,40 @@
+[tool.poetry]
+name = "integration-agent"
+version = "0.1.2"
+description = "An AI agent for automatically creating service integrations"
+authors = [
+    "Oseh Mathias <o@matmail.me>",
+]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "agent"}]
+
+
+[tool.poetry.dependencies]
+python = ">=3.12,<4.0"
+langchain = "^0.3.18"
+langchain-community = "^0.3.17"
+langchain-anthropic = "^0.3.7"
+tavily-python = "^0.5.1"
+beautifulsoup4 = "^4.13.3"
+requests = "^2.32.3"
+aiohttp = "^3.11.12"
+python-dotenv = "^1.0.1"
+tomli = "^2.2.1"
+tomli-w = "^1.2.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+black = "^25.1.0"
+isort = "^6.0.0"
+mypy = "^1.15.0"
+ruff = "^0.9.6"
+pytest-asyncio = "^0.25.3"
+pytest-mock = "^3.14.0"
+requests-mock = "^1.12.1"
+
+[build-system]
+requires = [
+    "poetry-core",
+]
+build-backend = "poetry.core.masonry.api"
