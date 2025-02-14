@@ -108,11 +108,22 @@ async def main():
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     spreadsheet_id = os.getenv("SPREADSHEET_ID")
     
+    # Add API keys for testing
+    api_keys = {
+        'hubspot': os.getenv('HUBSPOT_API_KEY'),
+        'intercom': os.getenv('INTERCOM_API_KEY'),
+        'opentable': os.getenv('OPENTABLE_API_KEY'),
+        'google': os.getenv('GOOGLE_REFRESH_TOKEN')
+    }
+    
     # Log environment variable status
     logger.info("Checking environment variables:")
     logger.info(f"Tavily API Key present: {bool(tavily_key)}")
     logger.info(f"Anthropic API Key present: {bool(anthropic_key)}")
     logger.info(f"Spreadsheet ID present: {bool(spreadsheet_id)}")
+    logger.info("Available testing credentials:")
+    for service, key in api_keys.items():
+        logger.info(f"- {service.title()}: {bool(key)}")
     
     if not all([tavily_key, anthropic_key, spreadsheet_id]):
         raise ValueError("Missing required environment variables")
@@ -166,6 +177,38 @@ async def main():
             
             if result["status"] == "success":
                 logger.info(f"Integration {row['integration_name']} created successfully")
+                
+                # Test integration if credentials are available
+                service_name = row['integration_name'].lower()
+                if any(service in service_name and key for service, key in api_keys.items()):
+                    logger.info(f"Found credentials for {service_name}, running integration test...")
+                    try:
+                        # Import and test the integration
+                        import importlib.util
+                        import sys
+                        
+                        # Get the main integration file path
+                        integration_file = Path(result['saved_files']['integration.py'])
+                        
+                        # Import the module
+                        spec = importlib.util.spec_from_file_location(
+                            f"integration_test_{service_name}",
+                            integration_file
+                        )
+                        module = importlib.util.module_from_spec(spec)
+                        sys.modules[spec.name] = module
+                        spec.loader.exec_module(module)
+                        
+                        # Run the test method if it exists
+                        if hasattr(module, 'test_integration'):
+                            test_result = await module.test_integration()
+                            logger.info(f"Integration test result: {test_result}")
+                            print(f"\n🧪 Integration test completed: {test_result}")
+                        else:
+                            logger.warning("No test_integration method found in the module")
+                    except Exception as test_error:
+                        logger.error(f"Integration test failed: {str(test_error)}")
+                        print(f"\n⚠️ Integration test failed: {str(test_error)}")
                 
                 # Mark row as complete
                 sheets_processor.mark_row_complete(row['row_number'])
